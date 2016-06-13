@@ -1,7 +1,7 @@
 'use strict';
 
 var connect = require('gulp-connect');
-var gulp = require('gulp');
+var gulp = require('liferay-gulp-tasks')(require('gulp'), {artifactName: 'senna.js'});
 var header = require('gulp-header');
 var metal = require('gulp-metal');
 var rename = require('gulp-rename');
@@ -16,6 +16,7 @@ metal.registerTasks({
 	globalName: 'senna',
 	mainBuildJsTasks: ['build:globals'],
 	moduleName: 'senna',
+	noSoy: true,
 	testBrowsers: ['Chrome', 'Firefox', 'Safari', 'IE10 - Win7', 'IE11 - Win7'],
 	testSaucelabsBrowsers: {
 		sl_chrome: {

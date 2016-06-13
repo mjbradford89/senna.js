@@ -4,6 +4,7 @@ import dom from 'metal-dom';
 import globals from '../../src/globals/globals';
 import HtmlScreen from '../../src/screen/HtmlScreen';
 import Surface from '../../src/surface/Surface';
+import UA from 'metal-useragent';
 
 describe('HtmlScreen', function() {
 
@@ -63,6 +64,15 @@ describe('HtmlScreen', function() {
 				assert.ok(reason instanceof Error);
 				done();
 			}).cancel();
+	});
+
+	it('should copy surface root node attributes from response content', (done) => {
+		var screen = new HtmlScreen();
+		screen.allocateVirtualDocumentForContent('<html attributeA="valueA"><div id="surfaceId">surface</div></html>');
+		screen.flip([]).then(() => {
+			assert.strictEqual('valueA', document.documentElement.getAttribute('attributeA'));
+			done();
+		});
 	});
 
 	it('should extract surface content from response content', () => {
@@ -252,6 +262,18 @@ describe('HtmlScreen', function() {
 				done();
 			});
 		assert.ok(screen.pendingStyles);
+		screen.activate();
+	});
+
+	it('should mutate temporary style hrefs to be unique on ie browsers', (done) => {
+		UA.testUserAgent('MSIE'); // Simulates ie user agent
+		var screen = new HtmlScreen();
+		screen.allocateVirtualDocumentForContent('<link id="testIEStlye" data-senna-track="temporary" rel="stylesheet" href="testIEStlyes.css">');
+		screen.evaluateStyles({})
+			.then(() => {
+				assert.ok(document.getElementById('testIEStlye').href.indexOf('?zx=') > -1);
+				done();
+			});
 		screen.activate();
 	});
 
