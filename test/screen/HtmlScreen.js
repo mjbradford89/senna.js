@@ -265,13 +265,39 @@ describe('HtmlScreen', function() {
 		screen.activate();
 	});
 
-	it('should mutate temporary style hrefs to be unique on ie browsers', (done) => {
+	it('should mutate temporary style hrefs to be unique on ie browsers', (done) => { //this test should more accurately test this bug by checking styles, not URL
 		UA.testUserAgent('MSIE'); // Simulates ie user agent
 		var screen = new HtmlScreen();
 		screen.allocateVirtualDocumentForContent('<link id="testIEStlye" data-senna-track="temporary" rel="stylesheet" href="testIEStlyes.css">');
 		screen.evaluateStyles({})
 			.then(() => {
-				assert.ok(document.getElementById('testIEStlye').href.indexOf('?zx=') > -1);
+				var style = document.getElementById('testIEStlye');
+				assert.ok(style.href.indexOf('?zx=') > -1);
+				dom.exitDocument(style);
+				done();
+			});
+		screen.activate();
+	});
+
+	it('should not cache styles on ie browsers', (done) => {
+		UA.testUserAgent('MSIE'); // Simulates ie user agent
+		// this test should demonstrate 148
+		var screen = new HtmlScreen();
+		window.sentinelLoadCount = 0;
+
+		screen.allocateVirtualDocumentForContent('<link id="testCacheStlye" data-senna-track="temporary" rel="stylesheet">')
+
+		var link = screen.virtualQuerySelectorAll_('#testCacheStlye')[0];
+		link.href = 'https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css';
+		link.href = link.href += '?param=value';
+		
+		link.addEventListener('load', function(event) {
+			window.sentinelLoadCount++;
+		});
+
+		screen.evaluateStyles({})
+			.then(() => {
+				assert.strictEqual(1, window.sentinelLoadCount)
 				done();
 			});
 		screen.activate();
