@@ -1,6 +1,7 @@
 'use strict';
 
 import { array, async, core } from 'metal';
+import debounce from 'metal-debounce';
 import dom from 'metal-dom';
 import CancellablePromise from 'metal-promise';
 import { EventEmitter, EventHandler } from 'metal-events';
@@ -186,7 +187,7 @@ class App extends EventEmitter {
 		this.appEventHandlers_ = new EventHandler();
 
 		this.appEventHandlers_.add(
-			dom.on(globals.window, 'scroll', this.onScroll_.bind(this)),
+			dom.on(globals.window, 'scroll', debounce(this.onScroll_.bind(this), 25)),
 			dom.on(globals.window, 'load', this.onLoad_.bind(this)),
 			dom.on(globals.window, 'popstate', this.onPopstate_.bind(this))
 		);
@@ -417,7 +418,11 @@ class App extends EventEmitter {
 			return null;
 		}
 
-		path = utils.getUrlPathWithoutHash(path).substr(this.basePath.length);
+		path = utils.getUrlPathWithoutHash(path);
+
+		// Makes sure that the path substring will be in the expected format
+		// (that is, will end with a "/").
+		path = utils.getUrlPathWithoutHash(path.substr(this.basePath.length));
 
 		for (var i = 0; i < this.routes.length; i++) {
 			var route = this.routes[i];
@@ -577,11 +582,6 @@ class App extends EventEmitter {
 	 */
 	maybeNavigate_(href, event) {
 		if (!this.canNavigate(href)) {
-			return;
-		}
-
-		if (this.allowPreventNavigate && event.defaultPrevented) {
-			console.log('Navigate prevented');
 			return;
 		}
 
@@ -956,7 +956,7 @@ class App extends EventEmitter {
 		if (this.formEventHandler_) {
 			this.formEventHandler_.removeListener();
 		}
-		this.formEventHandler_ = dom.delegate(document, 'submit', this.formSelector, this.onDocSubmitDelegate_.bind(this));
+		this.formEventHandler_ = dom.delegate(document, 'submit', this.formSelector, this.onDocSubmitDelegate_.bind(this), this.allowPreventNavigate);
 	}
 
 	/**
@@ -968,7 +968,7 @@ class App extends EventEmitter {
 		if (this.linkEventHandler_) {
 			this.linkEventHandler_.removeListener();
 		}
-		this.linkEventHandler_ = dom.delegate(document, 'click', this.linkSelector, this.onDocClickDelegate_.bind(this));
+		this.linkEventHandler_ = dom.delegate(document, 'click', this.linkSelector, this.onDocClickDelegate_.bind(this), this.allowPreventNavigate);
 	}
 
 	/**

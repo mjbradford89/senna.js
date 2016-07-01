@@ -3,6 +3,7 @@
 var connect = require('gulp-connect');
 var gulp = require('gulp');
 var header = require('gulp-header');
+var jsdoc = require('gulp-jsdoc3');
 var metal = require('gulp-metal');
 var rename = require('gulp-rename');
 var runSequence = require('run-sequence');
@@ -16,6 +17,7 @@ metal.registerTasks({
 	globalName: 'senna',
 	mainBuildJsTasks: ['build:globals'],
 	moduleName: 'senna',
+	noSoy: true,
 	testBrowsers: ['Chrome', 'Firefox', 'Safari', 'IE10 - Win7', 'IE11 - Win7'],
 	testSaucelabsBrowsers: {
 		sl_chrome: {
@@ -81,7 +83,7 @@ gulp.task('banner', function() {
 	var stamp = [
 		'/**',
 		' * Senna.js - <%= description %>',
-		' * @author <%= author.name %> <<%= author.email %>>',
+		' * @author Liferay, Inc.',
 		' * @version v<%= version %>',
 		' * @link http://sennajs.com',
 		' * @license BSD-3-Clause',
@@ -110,6 +112,15 @@ gulp.task('clean:debug:amd', function() {
 	return gulp.src('build/amd/senna/**/*.js')
 		.pipe(stripDebug())
 		.pipe(gulp.dest('build/amd/senna'));
+});
+
+gulp.task('docs', function() {
+  return gulp.src(['src/**/*.js', 'README.md'])
+    .pipe(jsdoc({
+      "opts": {
+        "destination": 'docs'
+      }
+    }));
 });
 
 // Runner ----------------------------------------------------------------------

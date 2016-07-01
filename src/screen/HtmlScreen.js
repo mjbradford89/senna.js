@@ -6,6 +6,9 @@ import CancellablePromise from 'metal-promise';
 import globals from '../globals/globals';
 import RequestScreen from './RequestScreen';
 import Surface from '../surface/Surface';
+import UA from 'metal-useragent';
+import Uri from 'metal-uri';
+import utils from '../utils/utils';
 
 class HtmlScreen extends RequestScreen {
 
@@ -46,6 +49,9 @@ class HtmlScreen extends RequestScreen {
 		if (!this.virtualDocument) {
 			this.virtualDocument = globals.document.createElement('html');
 		}
+
+		this.copyNodeAttributesFromContent_(htmlString, this.virtualDocument);
+
 		this.virtualDocument.innerHTML = htmlString;
 	}
 
@@ -81,6 +87,20 @@ class HtmlScreen extends RequestScreen {
 		}
 		if (bodySurface) {
 			bodySurface.id = globals.document.body.id;
+		}
+	}
+
+	/**
+	 * Copies attributes from the <html> tag of content to the given node.
+	 */
+	copyNodeAttributesFromContent_(content, node) {
+		content = content.replace(/[<]\s*html/ig, '<senna');
+		content = content.replace(/\/html\s*\>/ig, '/senna>');
+		node.innerHTML = content;
+		var placeholder = node.querySelector('senna');
+		if (placeholder) {
+			utils.clearNodeAttributes(node);
+			utils.copyNodeAttributes(placeholder, node);
 		}
 	}
 
@@ -175,6 +195,16 @@ class HtmlScreen extends RequestScreen {
 	}
 
 	/**
+	 * @Override
+	 */
+	flip(surfaces) {
+		return super.flip(surfaces).then(() => {
+			utils.clearNodeAttributes(document.documentElement);
+			utils.copyNodeAttributes(this.virtualDocument, document.documentElement);
+		});
+	}
+
+	/**
 	 * Extracts a key to identify the resource based on its attributes.
 	 * @param {Element} resource
 	 * @return {string} Extracted key based on resource attributes in order of
@@ -215,8 +245,38 @@ class HtmlScreen extends RequestScreen {
 				this.allocateVirtualDocumentForContent(content);
 				this.resolveTitleFromVirtualDocument();
 				this.assertSameBodyIdInVirtualDocument();
+				if (UA.isIe) {
+					this.makeTemporaryStylesHrefsUnique_();
+				}
 				return content;
 			});
+	}
+
+	/**
+	 * Queries temporary styles from virtual document, and makes them unique.
+	 * This is necessary for caching and load event firing issues specific to
+	 * IE11. https://developer.microsoft.com/en-us/microsoft-edge/platform/issues/7940171/
+	 */
+	makeTemporaryStylesHrefsUnique_() {
+		var temporariesInDoc = this.virtualQuerySelectorAll_(HtmlScreen.selectors.stylesTemporary);
+
+		temporariesInDoc.forEach((style) => {
+			this.replaceStyleAndMakeUnique_(style);
+		});
+	}
+
+	/**
+	 * Creates a new element from given, copies attributes, mutates href to be
+	 * unique to prevent caching and more than one load/error event from firing.
+	 */
+	replaceStyleAndMakeUnique_(style) {
+		if (style.href) {
+		 	var newStyle = globals.document.createElement(style.tagName);
+		 	style.href = new Uri(style.href).makeUnique().toString();
+		 	utils.copyNodeAttributes(style, newStyle);
+		 	style.parentNode.replaceChild(newStyle, style);
+		 	style.disabled = true;
+		}
 	}
 
 	/**

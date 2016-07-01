@@ -1,7 +1,7 @@
 /**
  * Senna.js - A blazing-fast Single Page Application engine
- * @author Eduardo Lundgren <edu@rdo.io>
- * @version v1.0.1
+ * @author Liferay, Inc.
+ * @version v1.4.0
  * @link http://sennajs.com
  * @license BSD-3-Clause
  */
@@ -87,43 +87,6 @@ babelHelpers;
 'use strict';
 
 /**
- * Holds value error messages.
- * @const
- */
-
-(function () {
-  var errors = function errors() {
-    babelHelpers.classCallCheck(this, errors);
-  };
-
-  /**
-   * Invalid status error message.
-   * @type {string}
-   * @static
-   */
-
-
-  errors.INVALID_STATUS = 'Invalid status code';
-
-  /**
-   * Request error message.
-   * @type {string}
-   * @static
-   */
-  errors.REQUEST_ERROR = 'Request error';
-
-  /**
-   * Request timeout error message.
-   * @type {string}
-   * @static
-   */
-  errors.REQUEST_TIMEOUT = 'Request timeout';
-
-  this.senna.errors = errors;
-}).call(this);
-'use strict';
-
-/**
  * A collection of core utility functions.
  * @const
  */
@@ -191,15 +154,21 @@ babelHelpers;
    * mutated with an unique id. Consecutive calls with the same object
    * reference won't mutate the object again, instead the current object uid
    * returns. See {@link core.UID_PROPERTY}.
-   * @type {opt_object} Optional object to be mutated with the uid. If not
-   *     specified this method only returns the uid.
+   * @param {Object=} opt_object Optional object to be mutated with the uid. If
+   *     not specified this method only returns the uid.
+   * @param {boolean=} opt_noInheritance Optional flag indicating if this
+   *     object's uid property can be inherited from parents or not.
    * @throws {Error} when invoked to indicate the method should be overridden.
    */
 
 
-		core.getUid = function getUid(opt_object) {
+		core.getUid = function getUid(opt_object, opt_noInheritance) {
 			if (opt_object) {
-				return opt_object[core.UID_PROPERTY] || (opt_object[core.UID_PROPERTY] = core.uniqueIdCounter_++);
+				var id = opt_object[core.UID_PROPERTY];
+				if (opt_noInheritance && !opt_object.hasOwnProperty(core.UID_PROPERTY)) {
+					id = null;
+				}
+				return id || (opt_object[core.UID_PROPERTY] = core.uniqueIdCounter_++);
 			}
 			return core.uniqueIdCounter_++;
 		};
@@ -424,12 +393,15 @@ babelHelpers;
    */
 
 		array.equal = function equal(arr1, arr2) {
+			if (arr1.length !== arr2.length) {
+				return false;
+			}
 			for (var i = 0; i < arr1.length; i++) {
 				if (arr1[i] !== arr2[i]) {
 					return false;
 				}
 			}
-			return arr1.length === arr2.length;
+			return true;
 		};
 
 		/**
@@ -822,8 +794,6 @@ babelHelpers;
 'use strict';
 
 (function () {
-	var core = this.senna.core;
-
 	var object = function () {
 		function object() {
 			babelHelpers.classCallCheck(this, object);
@@ -852,22 +822,16 @@ babelHelpers;
    * @param {string} name The fully qualified name.
    * @param {object=} opt_obj The object within which to look; default is
    *     <code>window</code>.
-   * @return {?} The value (object or primitive) or, if not found, null.
+   * @return {?} The value (object or primitive) or, if not found, undefined.
    */
 
 
 		object.getObjectByName = function getObjectByName(name, opt_obj) {
+			var scope = opt_obj || window;
 			var parts = name.split('.');
-			var cur = opt_obj || window;
-			var part;
-			while (part = parts.shift()) {
-				if (core.isDefAndNotNull(cur[part])) {
-					cur = cur[part];
-				} else {
-					return null;
-				}
-			}
-			return cur;
+			return parts.reduce(function (part, key) {
+				return part[key];
+			}, scope);
 		};
 
 		/**
@@ -886,6 +850,32 @@ babelHelpers;
 				mappedObj[keys[i]] = fn(keys[i], obj[keys[i]]);
 			}
 			return mappedObj;
+		};
+
+		/**
+   * Checks if the two given objects are equal. This is done via a shallow
+   * check, including only the keys directly contained by the 2 objects.
+   * @return {boolean}
+   */
+
+
+		object.shallowEqual = function shallowEqual(obj1, obj2) {
+			if (obj1 === obj2) {
+				return true;
+			}
+
+			var keys1 = Object.keys(obj1);
+			var keys2 = Object.keys(obj2);
+			if (keys1.length !== keys2.length) {
+				return false;
+			}
+
+			for (var i = 0; i < keys1.length; i++) {
+				if (obj1[keys1[i]] !== obj2[keys1[i]]) {
+					return false;
+				}
+			}
+			return true;
 		};
 
 		return object;
@@ -911,6 +901,18 @@ babelHelpers;
 
 		string.collapseBreakingSpaces = function collapseBreakingSpaces(str) {
 			return str.replace(/[\t\r\n ]+/g, ' ').replace(/^[\t\r\n ]+|[\t\r\n ]+$/g, '');
+		};
+
+		/**
+  * Escapes characters in the string that are not safe to use in a RegExp.
+  * @param {*} str The string to escape. If not a string, it will be casted
+  *     to one.
+  * @return {string} A RegExp safe, escaped copy of {@code s}.
+  */
+
+
+		string.escapeRegex = function escapeRegex(str) {
+			return String(str).replace(/([-()\[\]{}+?*.$\^|,:#<!\\])/g, '\\$1').replace(/\x08/g, '\\x08');
 		};
 
 		/**
@@ -974,7 +976,7 @@ babelHelpers;
   var object = this.senna.object;
   var string = this.senna.string;
   this.senna.metal = core;
-  this.sennaNamed.metal = {};
+  this.sennaNamed.metal = this.sennaNamed.metal || {};
   this.sennaNamed.metal.core = core;
   this.sennaNamed.metal.array = array;
   this.sennaNamed.metal.async = async;
@@ -984,117 +986,64 @@ babelHelpers;
 }).call(this);
 'use strict';
 
+/**
+  * Debounces function execution.
+  * @param {!function()} fn
+  * @param {number} delay
+  * @return {!function()}
+  */
+
 (function () {
-	var Disposable = this.sennaNamed.metal.Disposable;
+	function debounce(fn, delay) {
+		return function debounced() {
+			var args = arguments;
+			cancelDebounce(debounced);
+			debounced.id = setTimeout(function () {
+				fn.apply(null, args);
+			}, delay);
+		};
+	}
 
-	var Cacheable = function (_Disposable) {
-		babelHelpers.inherits(Cacheable, _Disposable);
+	/**
+  * Cancels the scheduled debounced function.
+  */
+	function cancelDebounce(debounced) {
+		clearTimeout(debounced.id);
+	}
 
+	this.senna.debounce = debounce;
+	this.sennaNamed.debounce = this.sennaNamed.debounce || {};
+	this.sennaNamed.debounce.cancelDebounce = cancelDebounce;
+	this.sennaNamed.debounce.debounce = debounce;
+}).call(this);
+'use strict';
 
-		/**
-   * Abstract class for defining cacheable behavior.
-   * @constructor
-   */
+(function () {
+	var METAL_DATA = '__metal_data__';
 
-		function Cacheable() {
-			babelHelpers.classCallCheck(this, Cacheable);
-
-
-			/**
-    * Holds the cached data.
-    * @type {!Object}
-    * @default null
-    * @protected
-    */
-
-			var _this = babelHelpers.possibleConstructorReturn(this, _Disposable.call(this));
-
-			_this.cache = null;
-
-			/**
-    * Holds whether class is cacheable.
-    * @type {boolean}
-    * @default false
-    * @protected
-    */
-			_this.cacheable = false;
-			return _this;
+	this.senna.metalData = function () {
+		function thisSennaMetalData() {
+			babelHelpers.classCallCheck(this, thisSennaMetalData);
 		}
 
 		/**
-   * Adds content to the cache.
-   * @param {string} content Content to be cached.
-   * @chainable
+   * Gets Metal.js's data for the given element.
+   * @param {!Element} element
+   * @return {!Object}
    */
 
-
-		Cacheable.prototype.addCache = function addCache(content) {
-			if (this.cacheable) {
-				this.cache = content;
+		thisSennaMetalData.get = function get(element) {
+			if (!element[METAL_DATA]) {
+				element[METAL_DATA] = {
+					delegating: {},
+					listeners: {}
+				};
 			}
-			return this;
+			return element[METAL_DATA];
 		};
 
-		/**
-   * Clears the cache.
-   * @chainable
-   */
-
-
-		Cacheable.prototype.clearCache = function clearCache() {
-			this.cache = null;
-			return this;
-		};
-
-		/**
-   * Disposes of this instance's object references.
-   * @override
-   */
-
-
-		Cacheable.prototype.disposeInternal = function disposeInternal() {
-			this.clearCache();
-		};
-
-		/**
-   * Gets the cached content.
-   * @return {Object} Cached content.
-   * @protected
-   */
-
-
-		Cacheable.prototype.getCache = function getCache() {
-			return this.cache;
-		};
-
-		/**
-   * Whether the class is cacheable.
-   * @return {boolean} Returns true when class is cacheable, false otherwise.
-   */
-
-
-		Cacheable.prototype.isCacheable = function isCacheable() {
-			return this.cacheable;
-		};
-
-		/**
-   * Sets whether the class is cacheable.
-   * @param {boolean} cacheable
-   */
-
-
-		Cacheable.prototype.setCacheable = function setCacheable(cacheable) {
-			if (!cacheable) {
-				this.clearCache();
-			}
-			this.cacheable = cacheable;
-		};
-
-		return Cacheable;
-	}(Disposable);
-
-	Cacheable.prototype.registerMetalComponent && Cacheable.prototype.registerMetalComponent(Cacheable, 'Cacheable')
-	this.senna.Cacheable = Cacheable;
+		return thisSennaMetalData;
+	}();
 }).call(this);
 'use strict';
 
@@ -1173,7 +1122,6 @@ babelHelpers;
 		return EventHandle;
 	}(Disposable);
 
-	EventHandle.prototype.registerMetalComponent && EventHandle.prototype.registerMetalComponent(EventHandle, 'EventHandle')
 	this.senna.EventHandle = EventHandle;
 }).call(this);
 'use strict';
@@ -1579,7 +1527,6 @@ babelHelpers;
 		return EventEmitter;
 	}(Disposable);
 
-	EventEmitter.prototype.registerMetalComponent && EventEmitter.prototype.registerMetalComponent(EventEmitter, 'EventEmitter')
 	this.senna.EventEmitter = EventEmitter;
 }).call(this);
 'use strict';
@@ -1587,7 +1534,6 @@ babelHelpers;
 (function () {
 	var array = this.sennaNamed.metal.array;
 	var Disposable = this.sennaNamed.metal.Disposable;
-	var object = this.sennaNamed.metal.object;
 
 	/**
   * EventEmitterProxy utility. It's responsible for linking two EventEmitter
@@ -1628,6 +1574,15 @@ babelHelpers;
     * @protected
     */
 			_this.originEmitter_ = originEmitter;
+
+			/**
+    * A list of events that are pending to be listened by an actual origin
+    * emitter. Events are stored here when the origin doesn't exist, so they
+    * can be set on a new origin when one is set.
+    * @type {!Array}
+    * @protected
+    */
+			_this.pendingEvents_ = [];
 
 			/**
     * Holds a map of events from the origin emitter that are already being proxied.
@@ -1712,7 +1667,7 @@ babelHelpers;
 
 		EventEmitterProxy.prototype.proxyEvent = function proxyEvent(event) {
 			if (this.shouldProxyEvent_(event)) {
-				this.proxiedEvents_[event] = this.addListenerForEvent_(event);
+				this.tryToAddListener_(event);
 			}
 		};
 
@@ -1728,24 +1683,26 @@ babelHelpers;
 				this.proxiedEvents_[events[i]].removeListener();
 			}
 			this.proxiedEvents_ = {};
+			this.pendingEvents_ = [];
 		};
 
 		/**
    * Changes the origin emitter. This automatically detaches any events that
    * were already being proxied from the previous emitter, and starts proxying
    * them on the new emitter instead.
+   * @param {!EventEmitter} originEmitter
    */
 
 
 		EventEmitterProxy.prototype.setOriginEmitter = function setOriginEmitter(originEmitter) {
-			var handles = this.proxiedEvents_;
+			var _this2 = this;
+
+			var events = this.originEmitter_ ? Object.keys(this.proxiedEvents_) : this.pendingEvents_;
 			this.removeListeners_();
 			this.originEmitter_ = originEmitter;
-
-			var events = Object.keys(handles);
-			for (var i = 0; i < events.length; i++) {
-				this.proxiedEvents_[events[i]] = this.addListenerForEvent_(events[i]);
-			}
+			events.forEach(function (event) {
+				return _this2.proxyEvent(event);
+			});
 		};
 
 		/**
@@ -1776,10 +1733,25 @@ babelHelpers;
 			this.targetEmitter_.on('newListener', this.proxyEvent.bind(this));
 		};
 
+		/**
+   * Adds a listener to the origin emitter, if it exists. Otherwise, stores
+   * the pending listener so it can be used on a future origin emitter.
+   * @param {string} event
+   * @protected
+   */
+
+
+		EventEmitterProxy.prototype.tryToAddListener_ = function tryToAddListener_(event) {
+			if (this.originEmitter_) {
+				this.proxiedEvents_[event] = this.addListenerForEvent_(event);
+			} else {
+				this.pendingEvents_.push(event);
+			}
+		};
+
 		return EventEmitterProxy;
 	}(Disposable);
 
-	EventEmitterProxy.prototype.registerMetalComponent && EventEmitterProxy.prototype.registerMetalComponent(EventEmitterProxy, 'EventEmitterProxy')
 	this.senna.EventEmitterProxy = EventEmitterProxy;
 }).call(this);
 'use strict';
@@ -1853,7 +1825,6 @@ babelHelpers;
 		return EventHandler;
 	}(Disposable);
 
-	EventHandler.prototype.registerMetalComponent && EventHandler.prototype.registerMetalComponent(EventHandler, 'EventHandler')
 	this.senna.EventHandler = EventHandler;
 }).call(this);
 'use strict';
@@ -1864,11 +1835,69 @@ babelHelpers;
   var EventHandle = this.senna.EventHandle;
   var EventHandler = this.senna.EventHandler;
   this.senna.events = EventEmitter;
-  this.sennaNamed.events = {};
+  this.sennaNamed.events = this.sennaNamed.events || {};
   this.sennaNamed.events.EventEmitter = EventEmitter;
   this.sennaNamed.events.EventEmitterProxy = EventEmitterProxy;
   this.sennaNamed.events.EventHandle = EventHandle;
   this.sennaNamed.events.EventHandler = EventHandler;
+}).call(this);
+'use strict';
+
+(function () {
+	var array = this.sennaNamed.metal.array;
+	var core = this.sennaNamed.metal.core;
+	var metalData = this.senna.metalData;
+	var EventHandle = this.sennaNamed.events.EventHandle;
+
+	/**
+  * This is a special EventHandle, that is responsible for dom delegated events
+  * (only the ones that receive a target element, not a selector string).
+  * @extends {EventHandle}
+  */
+
+	var DomDelegatedEventHandle = function (_EventHandle) {
+		babelHelpers.inherits(DomDelegatedEventHandle, _EventHandle);
+
+		/**
+   * The constructor for `DomDelegatedEventHandle`.
+   * @param {!Event} emitter Element the event was subscribed to.
+   * @param {string} event The name of the event that was subscribed to.
+   * @param {!Function} listener The listener subscribed to the event.
+   * @param {string=} opt_selector An optional selector used when delegating
+   *     the event.
+   * @constructor
+   */
+
+		function DomDelegatedEventHandle(emitter, event, listener, opt_selector) {
+			babelHelpers.classCallCheck(this, DomDelegatedEventHandle);
+
+			var _this = babelHelpers.possibleConstructorReturn(this, _EventHandle.call(this, emitter, event, listener));
+
+			_this.selector_ = opt_selector;
+			return _this;
+		}
+
+		/**
+   * @inheritDoc
+   */
+
+
+		DomDelegatedEventHandle.prototype.removeListener = function removeListener() {
+			var data = metalData.get(this.emitter_);
+			var selector = this.selector_;
+			var arr = core.isString(selector) ? data.delegating[this.event_].selectors : data.listeners;
+			var key = core.isString(selector) ? selector : this.event_;
+
+			array.remove(arr[key] || [], this.listener_);
+			if (arr[key] && arr[key].length === 0) {
+				delete arr[key];
+			}
+		};
+
+		return DomDelegatedEventHandle;
+	}(EventHandle);
+
+	this.senna.DomDelegatedEventHandle = DomDelegatedEventHandle;
 }).call(this);
 'use strict';
 
@@ -1915,7 +1944,6 @@ babelHelpers;
 		return DomEventHandle;
 	}(EventHandle);
 
-	DomEventHandle.prototype.registerMetalComponent && DomEventHandle.prototype.registerMetalComponent(DomEventHandle, 'DomEventHandle')
 	this.senna.DomEventHandle = DomEventHandle;
 }).call(this);
 'use strict';
@@ -1923,7 +1951,20 @@ babelHelpers;
 (function () {
 	var core = this.sennaNamed.metal.core;
 	var object = this.sennaNamed.metal.object;
+	var metalData = this.senna.metalData;
+	var DomDelegatedEventHandle = this.senna.DomDelegatedEventHandle;
 	var DomEventHandle = this.senna.DomEventHandle;
+
+
+	var NEXT_TARGET = '__metal_next_target__';
+	var USE_CAPTURE = {
+		blur: true,
+		error: true,
+		focus: true,
+		invalid: true,
+		load: true,
+		scroll: true
+	};
 
 	var dom = function () {
 		function dom() {
@@ -1958,7 +1999,9 @@ babelHelpers;
 
 		dom.addClassesWithNative_ = function addClassesWithNative_(element, classes) {
 			classes.split(' ').forEach(function (className) {
-				element.classList.add(className);
+				if (className) {
+					element.classList.add(className);
+				}
 			});
 		};
 
@@ -1986,6 +2029,71 @@ babelHelpers;
 
 			if (classesToAppend) {
 				element.className = element.className + classesToAppend;
+			}
+		};
+
+		/**
+   * Adds an event listener to the given element, to be triggered via delegate.
+   * @param {!Element} element
+   * @param {string} eventName
+   * @param {!function()} listener
+   * @protected
+   */
+
+
+		dom.addElementListener_ = function addElementListener_(element, eventName, listener) {
+			var data = metalData.get(element);
+			dom.addToArr_(data.listeners, eventName, listener);
+		};
+
+		/**
+   * Adds an event listener to the given element, to be triggered via delegate
+   * selectors.
+   * @param {!Element} element
+   * @param {string} eventName
+   * @param {string} selector
+   * @param {!function()} listener
+   * @protected
+   */
+
+
+		dom.addSelectorListener_ = function addSelectorListener_(element, eventName, selector, listener) {
+			var data = metalData.get(element);
+			dom.addToArr_(data.delegating[eventName].selectors, selector, listener);
+		};
+
+		/**
+   * Adds a value to an array inside an object, creating it first if it doesn't
+   * yet exist.
+   * @param {!Array} arr
+   * @param {string} key
+   * @param {*} value
+   * @protected
+   */
+
+
+		dom.addToArr_ = function addToArr_(arr, key, value) {
+			if (!arr[key]) {
+				arr[key] = [];
+			}
+			arr[key].push(value);
+		};
+
+		/**
+   * Attaches a delegate listener, unless there's already one attached.
+   * @param {!Element} element
+   * @param {string} eventName
+   * @protected
+   */
+
+
+		dom.attachDelegateEvent_ = function attachDelegateEvent_(element, eventName) {
+			var data = metalData.get(element);
+			if (!data.delegating[eventName]) {
+				data.delegating[eventName] = {
+					handle: dom.on(element, eventName, dom.handleDelegateEvent_, !!USE_CAPTURE[eventName]),
+					selectors: {}
+				};
 			}
 		};
 
@@ -2068,25 +2176,43 @@ babelHelpers;
 
 		/**
    * Listens to the specified event on the given DOM element, but only calls the
-   * callback with the event when it triggered by elements that match the given
-   * selector.
-   * @param {!Element} element The container DOM element to listen to the event on.
+   * given callback listener when it's triggered by elements that match the
+   * given selector or target element.
+   * @param {!Element} element The DOM element the event should be listened on.
    * @param {string} eventName The name of the event to listen to.
-   * @param {string} selector The selector that matches the child elements that
-   *   the event should be triggered for.
-   * @param {!function(!Object)} callback Function to be called when the event is
-   *   triggered. It will receive the normalized event object.
-   * @return {!DomEventHandle} Can be used to remove the listener.
+   * @param {!Element|string} selectorOrTarget Either an element or css selector
+   *     that should match the event for the listener to be triggered.
+   * @param {!function(!Object)} callback Function to be called when the event
+   *     is triggered. It will receive the normalized event object.
+   * @param {boolean=} opt_default Optional flag indicating if this is a default
+   *     listener. That means that it would only be executed after all non
+   *     default listeners, and only if the event isn't prevented via
+   *     `preventDefault`.
+   * @return {!EventHandle} Can be used to remove the listener.
    */
 
 
-		dom.delegate = function delegate(element, eventName, selector, callback) {
+		dom.delegate = function delegate(element, eventName, selectorOrTarget, callback, opt_default) {
 			var customConfig = dom.customEvents[eventName];
 			if (customConfig && customConfig.delegate) {
 				eventName = customConfig.originalEvent;
 				callback = customConfig.handler.bind(customConfig, callback);
 			}
-			return dom.on(element, eventName, dom.handleDelegateEvent_.bind(null, selector, callback));
+
+			if (opt_default) {
+				// Wrap callback so we don't set property directly on it.
+				callback = callback.bind();
+				callback.defaultListener_ = true;
+			}
+
+			dom.attachDelegateEvent_(element, eventName);
+			if (core.isString(selectorOrTarget)) {
+				dom.addSelectorListener_(element, eventName, selectorOrTarget, callback);
+			} else {
+				dom.addElementListener_(selectorOrTarget, eventName, callback);
+			}
+
+			return new DomDelegatedEventHandle(core.isString(selectorOrTarget) ? element : selectorOrTarget, eventName, callback, core.isString(selectorOrTarget) ? selectorOrTarget : null);
 		};
 
 		/**
@@ -2096,7 +2222,7 @@ babelHelpers;
 
 
 		dom.enterDocument = function enterDocument(node) {
-			dom.append(document.body, node);
+			node && dom.append(document.body, node);
 		};
 
 		/**
@@ -2106,43 +2232,44 @@ babelHelpers;
 
 
 		dom.exitDocument = function exitDocument(node) {
-			if (node.parentNode) {
+			if (node && node.parentNode) {
 				node.parentNode.removeChild(node);
 			}
 		};
 
 		/**
-   * This is called when an event is triggered by a delegate listener (see
-   * `dom.delegate` for more details).
-   * @param {string} selector The selector or element that matches the child
-   *   elements that the event should be triggered for.
-   * @param {!function(!Object)} callback Function to be called when the event
-   *   is triggered. It will receive the normalized event object.
+   * This is called when an event is triggered by a delegate listener. All
+   * matching listeners of this event type from `target` to `currentTarget` will
+   * be triggered.
    * @param {!Event} event The event payload.
    * @return {boolean} False if at least one of the triggered callbacks returns
-   *   false, or true otherwise.
+   *     false, or true otherwise.
+   * @protected
    */
 
 
-		dom.handleDelegateEvent_ = function handleDelegateEvent_(selector, callback, event) {
+		dom.handleDelegateEvent_ = function handleDelegateEvent_(event) {
 			dom.normalizeDelegateEvent_(event);
+			var currElement = core.isDef(event[NEXT_TARGET]) ? event[NEXT_TARGET] : event.target;
+			var ret = true;
+			var container = event.currentTarget;
+			var limit = event.currentTarget.parentNode;
+			var defFns = [];
 
-			var currentElement = event.target;
-			var returnValue = true;
-
-			while (currentElement && !event.stopped) {
-				if (core.isString(selector) && dom.match(currentElement, selector)) {
-					event.delegateTarget = currentElement;
-					returnValue &= callback(event);
-				}
-				if (currentElement === event.currentTarget) {
-					break;
-				}
-				currentElement = currentElement.parentNode;
+			while (currElement && currElement !== limit && !event.stopped) {
+				event.delegateTarget = currElement;
+				ret &= dom.triggerMatchedListeners_(container, currElement, event, defFns);
+				currElement = currElement.parentNode;
 			}
-			event.delegateTarget = null;
 
-			return returnValue;
+			for (var i = 0; i < defFns.length && !event.defaultPrevented; i++) {
+				event.delegateTarget = defFns[i].element;
+				ret &= defFns[i].fn(event);
+			}
+
+			event.delegateTarget = null;
+			event[NEXT_TARGET] = limit;
+			return ret;
 		};
 
 		/**
@@ -2384,7 +2511,9 @@ babelHelpers;
 
 		dom.removeClassesWithNative_ = function removeClassesWithNative_(element, classes) {
 			classes.split(' ').forEach(function (className) {
-				element.classList.remove(className);
+				if (className) {
+					element.classList.remove(className);
+				}
 			});
 		};
 
@@ -2430,6 +2559,7 @@ babelHelpers;
 
 		dom.stopImmediatePropagation_ = function stopImmediatePropagation_() {
 			this.stopped = true;
+			this.stoppedImmediate = true;
 			Event.prototype.stopImmediatePropagation.call(this);
 		};
 
@@ -2569,6 +2699,66 @@ babelHelpers;
 			element.dispatchEvent(eventObj);
 		};
 
+		/**
+   * Triggers the given listeners array.
+   * @param {Array<!function()} listeners
+   * @param {!Event} event
+   * @param {!Element} element
+   * @param {!Array} defaultFns Array to collect default listeners in, instead
+   *     of running them.
+   * @return {boolean} False if at least one of the triggered callbacks returns
+   *     false, or true otherwise.
+   * @protected
+   */
+
+
+		dom.triggerListeners_ = function triggerListeners_(listeners, event, element, defaultFns) {
+			var ret = true;
+			listeners = listeners || [];
+			for (var i = 0; i < listeners.length && !event.stoppedImmediate; i++) {
+				if (listeners[i].defaultListener_) {
+					defaultFns.push({
+						element: element,
+						fn: listeners[i]
+					});
+				} else {
+					ret &= listeners[i](event);
+				}
+			}
+			return ret;
+		};
+
+		/**
+   * Triggers all listeners for the given event type that are stored in the
+   * specified element.
+   * @param {!Element} container
+   * @param {!Element} element
+   * @param {!Event} event
+   * @param {!Array} defaultFns Array to collect default listeners in, instead
+   *     of running them.
+   * @return {boolean} False if at least one of the triggered callbacks returns
+   *     false, or true otherwise.
+   * @protected
+   */
+
+
+		dom.triggerMatchedListeners_ = function triggerMatchedListeners_(container, element, event, defaultFns) {
+			var data = metalData.get(element);
+			var listeners = data.listeners[event.type];
+			var ret = dom.triggerListeners_(listeners, event, element, defaultFns);
+
+			var selectorsMap = metalData.get(container).delegating[event.type].selectors;
+			var selectors = Object.keys(selectorsMap);
+			for (var i = 0; i < selectors.length && !event.stoppedImmediate; i++) {
+				if (dom.match(element, selectors[i])) {
+					listeners = selectorsMap[selectors[i]];
+					ret &= dom.triggerListeners_(listeners, event, element, defaultFns);
+				}
+			}
+
+			return ret;
+		};
+
 		return dom;
 	}();
 
@@ -2608,7 +2798,7 @@ babelHelpers;
 
 		DomEventEmitterProxy.prototype.addListener_ = function addListener_(event, listener) {
 			if (this.originEmitter_.addEventListener) {
-				if (event.startsWith('delegate:')) {
+				if (this.isDelegateEvent_(event)) {
 					var index = event.indexOf(':', 9);
 					var eventName = event.substring(9, index);
 					var selector = event.substring(index + 1);
@@ -2622,6 +2812,18 @@ babelHelpers;
 		};
 
 		/**
+   * Checks if the given event is of the delegate type.
+   * @param {string} event
+   * @return {boolean}
+   * @protected
+   */
+
+
+		DomEventEmitterProxy.prototype.isDelegateEvent_ = function isDelegateEvent_(event) {
+			return event.substr(0, 9) === 'delegate:';
+		};
+
+		/**
    * Checks if the given event is supported by the origin element.
    * @param {string} event
    * @protected
@@ -2629,7 +2831,10 @@ babelHelpers;
 
 
 		DomEventEmitterProxy.prototype.isSupportedDomEvent_ = function isSupportedDomEvent_(event) {
-			return event.startsWith('delegate:') && event.indexOf(':', 9) !== -1 || dom.supportsEvent(this.originEmitter_, event);
+			if (!this.originEmitter_ || !this.originEmitter_.addEventListener) {
+				return true;
+			}
+			return this.isDelegateEvent_(event) && event.indexOf(':', 9) !== -1 || dom.supportsEvent(this.originEmitter_, event);
 		};
 
 		/**
@@ -2642,13 +2847,12 @@ babelHelpers;
 
 
 		DomEventEmitterProxy.prototype.shouldProxyEvent_ = function shouldProxyEvent_(event) {
-			return _EventEmitterProxy.prototype.shouldProxyEvent_.call(this, event) && (!this.originEmitter_.addEventListener || this.isSupportedDomEvent_(event));
+			return _EventEmitterProxy.prototype.shouldProxyEvent_.call(this, event) && this.isSupportedDomEvent_(event);
 		};
 
 		return DomEventEmitterProxy;
 	}(EventEmitterProxy);
 
-	DomEventEmitterProxy.prototype.registerMetalComponent && DomEventEmitterProxy.prototype.registerMetalComponent(DomEventEmitterProxy, 'DomEventEmitterProxy')
 	this.senna.DomEventEmitterProxy = DomEventEmitterProxy;
 }).call(this);
 'use strict';
@@ -2783,8 +2987,8 @@ babelHelpers;
 				dom.exitDocument(script);
 				opt_callback && opt_callback();
 			};
-			dom.on(script, 'load', callback);
-			dom.on(script, 'error', callback);
+			dom.once(script, 'load', callback);
+			dom.once(script, 'error', callback);
 
 			if (opt_appendFn) {
 				opt_appendFn(script);
@@ -2944,8 +3148,8 @@ babelHelpers;
 			if (style.tagName === 'STYLE') {
 				async.nextTick(callback);
 			} else {
-				dom.on(style, 'load', callback);
-				dom.on(style, 'error', callback);
+				dom.once(style, 'load', callback);
+				dom.once(style, 'error', callback);
 			}
 
 			if (opt_appendFn) {
@@ -3045,7 +3249,7 @@ babelHelpers;
   var globalEval = this.senna.globalEval;
   var globalEvalStyles = this.senna.globalEvalStyles;
   this.senna.dom = dom;
-  this.sennaNamed.dom = {};
+  this.sennaNamed.dom = this.sennaNamed.dom || {};
   this.sennaNamed.dom.dom = dom;
   this.sennaNamed.dom.DomEventEmitterProxy = DomEventEmitterProxy;
   this.sennaNamed.dom.DomEventHandle = DomEventHandle;
@@ -3970,7 +4174,7 @@ babelHelpers;
   /** @override */
   CancellablePromise.CancellationError.prototype.name = 'cancel';
 
-  this.sennaNamed.Promise = {};
+  this.sennaNamed.Promise = this.sennaNamed.Promise || {};
   this.sennaNamed.Promise.CancellablePromise = CancellablePromise;
   this.senna.Promise = CancellablePromise;
 }).call(this);
@@ -4210,7 +4414,6 @@ babelHelpers;
 		return MultiMap;
 	}(Disposable);
 
-	MultiMap.prototype.registerMetalComponent && MultiMap.prototype.registerMetalComponent(MultiMap, 'MultiMap')
 	this.senna.MultiMap = MultiMap;
 }).call(this);
 'use strict';
@@ -4814,10 +5017,23 @@ babelHelpers;
 		}
 
 		/**
+   * Copies attributes form source node to target node.
+   * @return {void}
+   * @static
+   */
+
+		utils.copyNodeAttributes = function copyNodeAttributes(source, target) {
+			Array.prototype.slice.call(source.attributes).forEach(function (attribute) {
+				return target.setAttribute(attribute.name, attribute.value);
+			});
+		};
+
+		/**
    * Gets the current browser path including hashbang.
    * @return {!string}
    * @static
    */
+
 
 		utils.getCurrentBrowserPath = function getCurrentBrowserPath() {
 			return this.getCurrentBrowserPathWithoutHash() + globals.window.location.hash;
@@ -4882,6 +5098,19 @@ babelHelpers;
 
 		utils.isHtml5HistorySupported = function isHtml5HistorySupported() {
 			return !!(globals.window.history && globals.window.history.pushState);
+		};
+
+		/**
+   * Removes all attributes form node.
+   * @return {void}
+   * @static
+   */
+
+
+		utils.clearNodeAttributes = function clearNodeAttributes(node) {
+			Array.prototype.slice.call(node.attributes).forEach(function (attribute) {
+				return node.removeAttribute(attribute.name);
+			});
 		};
 
 		return utils;
@@ -4977,6 +5206,119 @@ babelHelpers;
 	}();
 
 	this.senna.Route = Route;
+}).call(this);
+'use strict';
+
+(function () {
+	var Disposable = this.sennaNamed.metal.Disposable;
+
+	var Cacheable = function (_Disposable) {
+		babelHelpers.inherits(Cacheable, _Disposable);
+
+
+		/**
+   * Abstract class for defining cacheable behavior.
+   * @constructor
+   */
+
+		function Cacheable() {
+			babelHelpers.classCallCheck(this, Cacheable);
+
+
+			/**
+    * Holds the cached data.
+    * @type {!Object}
+    * @default null
+    * @protected
+    */
+
+			var _this = babelHelpers.possibleConstructorReturn(this, _Disposable.call(this));
+
+			_this.cache = null;
+
+			/**
+    * Holds whether class is cacheable.
+    * @type {boolean}
+    * @default false
+    * @protected
+    */
+			_this.cacheable = false;
+			return _this;
+		}
+
+		/**
+   * Adds content to the cache.
+   * @param {string} content Content to be cached.
+   * @chainable
+   */
+
+
+		Cacheable.prototype.addCache = function addCache(content) {
+			if (this.cacheable) {
+				this.cache = content;
+			}
+			return this;
+		};
+
+		/**
+   * Clears the cache.
+   * @chainable
+   */
+
+
+		Cacheable.prototype.clearCache = function clearCache() {
+			this.cache = null;
+			return this;
+		};
+
+		/**
+   * Disposes of this instance's object references.
+   * @override
+   */
+
+
+		Cacheable.prototype.disposeInternal = function disposeInternal() {
+			this.clearCache();
+		};
+
+		/**
+   * Gets the cached content.
+   * @return {Object} Cached content.
+   * @protected
+   */
+
+
+		Cacheable.prototype.getCache = function getCache() {
+			return this.cache;
+		};
+
+		/**
+   * Whether the class is cacheable.
+   * @return {boolean} Returns true when class is cacheable, false otherwise.
+   */
+
+
+		Cacheable.prototype.isCacheable = function isCacheable() {
+			return this.cacheable;
+		};
+
+		/**
+   * Sets whether the class is cacheable.
+   * @param {boolean} cacheable
+   */
+
+
+		Cacheable.prototype.setCacheable = function setCacheable(cacheable) {
+			if (!cacheable) {
+				this.clearCache();
+			}
+			this.cacheable = cacheable;
+		};
+
+		return Cacheable;
+	}(Disposable);
+
+	this.senna.Cacheable = Cacheable;
 }).call(this);
 'use strict';
 
@@ -5250,7 +5592,6 @@ babelHelpers;
   */
 
 
-	Screen.prototype.registerMetalComponent && Screen.prototype.registerMetalComponent(Screen, 'Screen')
 	Screen.isImplementedBy = function (object) {
 		return object instanceof Screen;
 	};
@@ -5563,7 +5904,6 @@ babelHelpers;
     */
 
 
-	Surface.prototype.registerMetalComponent && Surface.prototype.registerMetalComponent(Surface, 'Surface')
 	Surface.DEFAULT = 'default';
 
 	/**
@@ -5609,6 +5949,7 @@ babelHelpers;
 	var array = this.sennaNamed.metal.array;
 	var async = this.sennaNamed.metal.async;
 	var core = this.sennaNamed.metal.core;
+	var debounce = this.senna.debounce;
 	var dom = this.senna.dom;
 	var CancellablePromise = this.senna.Promise;
 	var EventEmitter = this.sennaNamed.events.EventEmitter;
@@ -5801,7 +6142,7 @@ babelHelpers;
 
 			_this.appEventHandlers_ = new EventHandler();
 
-			_this.appEventHandlers_.add(dom.on(globals.window, 'scroll', _this.onScroll_.bind(_this)), dom.on(globals.window, 'load', _this.onLoad_.bind(_this)), dom.on(globals.window, 'popstate', _this.onPopstate_.bind(_this)));
+			_this.appEventHandlers_.add(dom.on(globals.window, 'scroll', debounce(_this.onScroll_.bind(_this), 25)), dom.on(globals.window, 'load', _this.onLoad_.bind(_this)), dom.on(globals.window, 'popstate', _this.onPopstate_.bind(_this)));
 
 			_this.on('startNavigate', _this.onStartNavigate_);
 			_this.on('beforeNavigate', _this.onBeforeNavigate_);
@@ -6061,7 +6402,11 @@ babelHelpers;
 				return null;
 			}
 
-			path = utils.getUrlPathWithoutHash(path).substr(this.basePath.length);
+			path = utils.getUrlPathWithoutHash(path);
+
+			// Makes sure that the path substring will be in the expected format
+			// (that is, will end with a "/").
+			path = utils.getUrlPathWithoutHash(path.substr(this.basePath.length));
 
 			for (var i = 0; i < this.routes.length; i++) {
 				var route = this.routes[i];
@@ -6249,11 +6594,6 @@ babelHelpers;
 
 		App.prototype.maybeNavigate_ = function maybeNavigate_(href, event) {
 			if (!this.canNavigate(href)) {
-				return;
-			}
-
-			if (this.allowPreventNavigate && event.defaultPrevented) {
-				void 0;
 				return;
 			}
 
@@ -6679,7 +7019,7 @@ babelHelpers;
 			if (this.formEventHandler_) {
 				this.formEventHandler_.removeListener();
 			}
-			this.formEventHandler_ = dom.delegate(document, 'submit', this.formSelector, this.onDocSubmitDelegate_.bind(this));
+			this.formEventHandler_ = dom.delegate(document, 'submit', this.formSelector, this.onDocSubmitDelegate_.bind(this), this.allowPreventNavigate);
 		};
 
 		/**
@@ -6693,7 +7033,7 @@ babelHelpers;
 			if (this.linkEventHandler_) {
 				this.linkEventHandler_.removeListener();
 			}
-			this.linkEventHandler_ = dom.delegate(document, 'click', this.linkSelector, this.onDocClickDelegate_.bind(this));
+			this.linkEventHandler_ = dom.delegate(document, 'click', this.linkSelector, this.onDocClickDelegate_.bind(this), this.allowPreventNavigate);
 		};
 
 		/**
@@ -6784,21 +7124,7 @@ babelHelpers;
 		return App;
 	}(EventEmitter);
 
-	App.prototype.registerMetalComponent && App.prototype.registerMetalComponent(App, 'App')
 	this.senna.App = App;
-}).call(this);
-'use strict';
-
-(function () {
-	this.senna.dataAttributes = {
-		basePath: 'data-senna-base-path',
-		linkSelector: 'data-senna-link-selector',
-		loadingCssClass: 'data-senna-loading-css-class',
-		senna: 'data-senna',
-		dispatch: 'data-senna-dispatch',
-		surface: 'data-senna-surface',
-		updateScrollPosition: 'data-senna-update-scroll-position'
-	};
 }).call(this);
 'use strict';
 
@@ -6851,12 +7177,13 @@ babelHelpers;
    * @param {MultiMap=} opt_params
    * @param {number=} opt_timeout
    * @param {boolean=} opt_sync
+   * @param {boolean=} opt_withCredentials
    * @return {Promise} Deferred ajax request.
    * @protected
    */
 
 
-		Ajax.request = function request(url, method, body, opt_headers, opt_params, opt_timeout, opt_sync) {
+		Ajax.request = function request(url, method, body, opt_headers, opt_params, opt_timeout, opt_sync, opt_withCredentials) {
 			var request = new XMLHttpRequest();
 
 			var promise = new Promise(function (resolve, reject) {
@@ -6885,6 +7212,10 @@ babelHelpers;
 
 			request.open(method, url, !opt_sync);
 
+			if (opt_withCredentials) {
+				request.withCredentials = true;
+			}
+
 			if (opt_headers) {
 				opt_headers.names().forEach(function (name) {
 					request.setRequestHeader(name, opt_headers.getAll(name).join(', '));
@@ -6906,6 +7237,43 @@ babelHelpers;
 	}();
 
 	this.senna.Ajax = Ajax;
+}).call(this);
+'use strict';
+
+/**
+ * Holds value error messages.
+ * @const
+ */
+
+(function () {
+  var errors = function errors() {
+    babelHelpers.classCallCheck(this, errors);
+  };
+
+  /**
+   * Invalid status error message.
+   * @type {string}
+   * @static
+   */
+
+
+  errors.INVALID_STATUS = 'Invalid status code';
+
+  /**
+   * Request error message.
+   * @type {string}
+   * @static
+   */
+  errors.REQUEST_ERROR = 'Request error';
+
+  /**
+   * Request timeout error message.
+   * @type {string}
+   * @static
+   */
+  errors.REQUEST_TIMEOUT = 'Request timeout';
+
+  this.senna.errors = errors;
 }).call(this);
 'use strict';
 
@@ -7264,15 +7632,18 @@ babelHelpers;
 			var body = null;
 			var httpMethod = this.httpMethod;
 
-			if (globals.capturedFormElement) {
-				body = new FormData(globals.capturedFormElement);
-				httpMethod = RequestScreen.POST;
-			}
-
 			var headers = new MultiMap();
 			Object.keys(this.httpHeaders).forEach(function (header) {
 				return headers.add(header, _this2.httpHeaders[header]);
 			});
+
+			if (globals.capturedFormElement) {
+				body = new FormData(globals.capturedFormElement);
+				httpMethod = RequestScreen.POST;
+				if (UA.isIeOrEdge) {
+					headers.add('If-None-Match', '"0"');
+				}
+			}
 
 			var requestPath = this.formatLoadPath(path);
 			return Ajax.request(requestPath, httpMethod, body, headers, null, this.timeout).then(function (xhr) {
@@ -7368,7 +7739,6 @@ babelHelpers;
   */
 
 
-	RequestScreen.prototype.registerMetalComponent && RequestScreen.prototype.registerMetalComponent(RequestScreen, 'RequestScreen')
 	RequestScreen.GET = 'get';
 
 	/**
@@ -7400,6 +7770,9 @@ babelHelpers;
 	var globals = this.senna.globals;
 	var RequestScreen = this.senna.RequestScreen;
 	var Surface = this.senna.Surface;
+	var UA = this.senna.UA;
+	var Uri = this.senna.Uri;
+	var utils = this.senna.utils;
 
 	var HtmlScreen = function (_RequestScreen) {
 		babelHelpers.inherits(HtmlScreen, _RequestScreen);
@@ -7452,6 +7825,9 @@ babelHelpers;
 			if (!this.virtualDocument) {
 				this.virtualDocument = globals.document.createElement('html');
 			}
+
+			this.copyNodeAttributesFromContent_(htmlString, this.virtualDocument);
+
 			this.virtualDocument.innerHTML = htmlString;
 		};
 
@@ -7467,6 +7843,9 @@ babelHelpers;
 			var isTemporaryStyle = dom.match(newStyle, HtmlScreen.selectors.stylesTemporary);
 			if (isTemporaryStyle) {
 				this.pendingStyles.push(newStyle);
+				if (UA.isIe && newStyle.href) {
+					newStyle.href = new Uri(newStyle.href).makeUnique().toString();
+				}
 			}
 			if (newStyle.id) {
 				var styleInDoc = globals.document.getElementById(newStyle.id);
@@ -7491,6 +7870,22 @@ babelHelpers;
 			}
 			if (bodySurface) {
 				bodySurface.id = globals.document.body.id;
+			}
+		};
+
+		/**
+   * Copies attributes from the <html> tag of content to the given node.
+   */
+
+
+		HtmlScreen.prototype.copyNodeAttributesFromContent_ = function copyNodeAttributesFromContent_(content, node) {
+			content = content.replace(/[<]\s*html/ig, '<senna');
+			content = content.replace(/\/html\s*\>/ig, '/senna>');
+			node.innerHTML = content;
+			var placeholder = node.querySelector('senna');
+			if (placeholder) {
+				utils.clearNodeAttributes(node);
+				utils.copyNodeAttributes(placeholder, node);
 			}
 		};
 
@@ -7604,6 +7999,20 @@ babelHelpers;
 		};
 
 		/**
+   * @Override
+   */
+
+
+		HtmlScreen.prototype.flip = function flip(surfaces) {
+			var _this5 = this;
+
+			return _RequestScreen.prototype.flip.call(this, surfaces).then(function () {
+				utils.clearNodeAttributes(document.documentElement);
+				utils.copyNodeAttributes(_this5.virtualDocument, document.documentElement);
+			});
+		};
+
+		/**
    * Extracts a key to identify the resource based on its attributes.
    * @param {Element} resource
    * @return {string} Extracted key based on resource attributes in order of
@@ -7647,12 +8056,12 @@ babelHelpers;
 
 
 		HtmlScreen.prototype.load = function load(path) {
-			var _this5 = this;
+			var _this6 = this;
 
 			return _RequestScreen.prototype.load.call(this, path).then(function (content) {
-				_this5.allocateVirtualDocumentForContent(content);
-				_this5.resolveTitleFromVirtualDocument();
-				_this5.assertSameBodyIdInVirtualDocument();
+				_this6.allocateVirtualDocumentForContent(content);
+				_this6.resolveTitleFromVirtualDocument();
+				_this6.assertSameBodyIdInVirtualDocument();
 				return content;
 			});
 		};
@@ -7721,7 +8130,6 @@ babelHelpers;
   */
 
 
-	HtmlScreen.prototype.registerMetalComponent && HtmlScreen.prototype.registerMetalComponent(HtmlScreen, 'HtmlScreen')
 	HtmlScreen.selectors = {
 		scripts: 'script[data-senna-track]',
 		scriptsPermanent: 'script[data-senna-track="permanent"]',
@@ -7740,6 +8148,35 @@ babelHelpers;
 	HtmlScreen.permanentResourcesInDoc = {};
 
 	this.senna.HtmlScreen = HtmlScreen;
+}).call(this);
+'use strict';
+
+(function () {
+  var App = this.senna.App;
+  var HtmlScreen = this.senna.HtmlScreen;
+  var RequestScreen = this.senna.RequestScreen;
+  var Route = this.senna.Route;
+  var Screen = this.senna.Screen;
+  this.senna.senna = App;
+  this.sennaNamed.senna = this.sennaNamed.senna || {};
+  this.sennaNamed.senna.App = App;
+  this.sennaNamed.senna.HtmlScreen = HtmlScreen;
+  this.sennaNamed.senna.Route = Route;
+  this.sennaNamed.senna.RequestScreen = RequestScreen;
+  this.sennaNamed.senna.Screen = Screen;
+}).call(this);
+'use strict';
+
+(function () {
+	this.senna.dataAttributes = {
+		basePath: 'data-senna-base-path',
+		linkSelector: 'data-senna-link-selector',
+		loadingCssClass: 'data-senna-loading-css-class',
+		senna: 'data-senna',
+		dispatch: 'data-senna-dispatch',
+		surface: 'data-senna-surface',
+		updateScrollPosition: 'data-senna-update-scroll-position'
+	};
 }).call(this);
 'use strict';
 
@@ -8036,7 +8473,6 @@ babelHelpers;
 		return AppDataAttributeHandler;
 	}(Disposable);
 
-	AppDataAttributeHandler.prototype.registerMetalComponent && AppDataAttributeHandler.prototype.registerMetalComponent(AppDataAttributeHandler, 'AppDataAttributeHandler')
 	this.senna.AppDataAttributeHandler = AppDataAttributeHandler;
 }).call(this);
 'use strict';
